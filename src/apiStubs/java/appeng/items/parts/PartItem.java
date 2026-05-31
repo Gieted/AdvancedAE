@@ -1,0 +1,1 @@
+package appeng.items.parts; import appeng.api.parts.IPartItem; import net.minecraft.item.Item; import java.util.function.Function; public class PartItem<T> extends Item implements IPartItem<T> { public PartItem(Properties p, Class<T> c, Function<IPartItem<?>, T> f){ super(p); } }

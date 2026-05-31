@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "PEP",
+    "CDC",
+    " R "
+  ],
+  "key": {
+    "P": { "item": "appliedenergistics2:formation_core" },
+    "E": { "item": "appliedenergistics2:export_bus" },
+    "C": { "item": "appliedenergistics2:capacity_card" },
+    "D": { "item": "minecraft:comparator" },
+    "R": { "item": "minecraft:redstone" }
+  },
+  "result": { "item": "stockexportbus:stock_export_bus_part" }
+}

@@ -1,0 +1,1 @@
+package net.minecraft.item; public class Item { public static class Properties { public Properties group(Object tab){ return this; } } public Item(Properties p){} public void setRegistryName(String modid, String id){} }

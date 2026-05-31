@@ -1,0 +1,1 @@
+package appeng.util; import appeng.api.storage.data.IAEItemStack; import net.minecraft.item.ItemStack; public class Platform { public static IAEItemStack getAEStackFromItemStack(ItemStack stack){ return null; } }

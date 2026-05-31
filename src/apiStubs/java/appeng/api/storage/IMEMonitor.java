@@ -1,0 +1,1 @@
+package appeng.api.storage; import appeng.api.config.Actionable; public interface IMEMonitor<T> { T extractItems(T request, Actionable mode, Object source); T injectItems(T input, Actionable mode, Object source); }

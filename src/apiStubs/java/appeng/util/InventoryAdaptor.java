@@ -1,0 +1,1 @@
+package appeng.util; import appeng.util.inv.ItemSlot; import net.minecraft.item.ItemStack; import java.util.*; public class InventoryAdaptor implements Iterable<ItemSlot> { public ItemStack addItems(ItemStack stack){ return ItemStack.EMPTY; } public Iterator<ItemSlot> iterator(){ return Collections.emptyIterator(); } }
