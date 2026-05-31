@@ -1,87 +1,18 @@
-import org.gradle.api.initialization.resolve.RulesMode
-
 pluginManagement {
     repositories {
-        mavenLocal()
-        mavenCentral()
         gradlePluginPortal()
-        maven {
-            name = 'cursemaven'
-            url = 'https://www.cursemaven.com'
-            content {
-                includeGroup 'curse.maven'
-            }
-        }
-        maven {
-            url = 'https://maven.firstdark.dev/releases'
-        }
+        maven { url = 'https://maven.minecraftforge.net/' }
+        mavenCentral()
     }
-    plugins {
-        id 'net.neoforged.moddev' version '2.0.141'
-        id 'net.neoforged.moddev.repositories' version '2.0.141'
-        id 'com.diffplug.spotless' version '8.4.0'
-    }
-}
-
-plugins {
-    id 'net.neoforged.moddev.repositories'
-    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
 
 dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        maven { url = 'https://maven.minecraftforge.net/' }
+        maven { url = 'https://www.cursemaven.com' }
         mavenCentral()
-        mavenLocal()
-        maven {
-            name = 'TerraformersMC'
-            url = 'https://maven.terraformersmc.com/'
-            content {
-                includeGroup 'dev.emi'
-            }
-        }
-        maven {
-            name = 'cursemaven'
-            url = 'https://www.cursemaven.com'
-            content {
-                includeGroup 'curse.maven'
-            }
-        }
-        maven {
-            name = 'Modmaven'
-            url = uri("https://modmaven.dev/")
-            content {
-                includeGroup 'appeng'
-                includeGroup 'de.mari_023'
-            }
-        }
-        maven {
-            url = 'https://maven.theillusivec4.top/'
-            content {
-                includeGroup 'top.theillusivec4.curios'
-            }
-        }
-        maven {
-            url = 'https://maven.shedaniel.me/'
-            content {
-                includeGroup 'me.shedaniel'
-                includeGroup 'me.shedaniel.cloth'
-                includeGroup 'dev.architectury'
-            }
-        }
-        maven {
-            name = 'GeckoLib'
-            url = 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
-            content {
-                includeGroup 'com.geckolib'
-            }
-        }
-        maven {
-            url = 'https://maven.blamejared.com/'
-            content {
-                includeGroup 'mezz.jei'
-            }
-        }
     }
 }
 
-rootProject.name = 'advanced_ae';
+rootProject.name = 'StockExportBus'

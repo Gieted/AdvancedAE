@@ -1,0 +1,1 @@
+package net.minecraftforge.fml.common; import java.lang.annotation.*; @Retention(RetentionPolicy.RUNTIME) @Target(ElementType.TYPE) public @interface Mod { String value(); @Retention(RetentionPolicy.RUNTIME) @Target(ElementType.TYPE) public @interface EventBusSubscriber { String modid(); Bus bus(); enum Bus { MOD, FORGE } } }

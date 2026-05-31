@@ -1,313 +1,53 @@
-import com.diffplug.gradle.spotless.JsonExtension
-import com.diffplug.spotless.LineEnding
-import com.hypherionmc.modpublisher.properties.ModLoader
-
 plugins {
-    id 'idea'
-    id 'java-library'
-    id 'maven-publish'
-    id 'net.neoforged.moddev'
-    id 'com.diffplug.spotless'
-    id "com.hypherionmc.modutils.modpublisher" version '2.2.1'
+    id 'java'
 }
 
-tasks.named('wrapper', Wrapper).configure {
-    distributionType = Wrapper.DistributionType.BIN
-}
-
-version = mod_version
 group = mod_group_id
-neoForge.version = project.neoforge_version
+version = mod_version
 
 base {
-    archivesName = mod_name.replace(" ", "")
+    archivesName = 'StockExportBus-1.16.5'
 }
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(25)
-
-neoForge {
-    validateAccessTransformers = true
-
-    mods {
-        advanced_ae {
-            sourceSet sourceSets.main
-        }
-    }
-
-    accessTransformers {
-        file('src/main/resources/META-INF/accesstransformer.cfg')
-    }
-
-    runs {
-        client {
-            client()
-            systemProperties = [
-                    'guideDev.ae2guide.sources': file('src/main/resources/assets/advanced_ae/ae2guide/aae_intro/').absolutePath,
-                    'guideDev.ae2guide.sourcesNamespace': 'advanced_ae'
-            ]
-        }
-
-        server {
-            server()
-        }
-
-        gametestWorld {
-            type = "gameTestServer"
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
-        }
-
-        data {
-            clientData()
-            programArguments = [
-                    '--mod', project.mod_id,
-                    '--all',
-                    '--output', file('src/generated/resources/').getAbsolutePath(),
-                    '--existing', file('src/main/resources/').getAbsolutePath()
-            ]
-        }
-
-        configureEach {
-            systemProperty 'forge.logging.markers', 'REGISTRIES'
-            logLevel = org.slf4j.event.Level.INFO
-        }
-    }
-}
-
-sourceSets.main.resources {
-    srcDir 'src/generated/resources'
-    exclude '.cache/'
+sourceSets {
+    apiStubs { java.srcDir 'src/apiStubs/java' }
+    main { compileClasspath += apiStubs.output }
 }
 
 configurations {
-    localRuntimeOnly
-    buildtoolsImplementation.extendsFrom(compileClasspath)
-    runtimeClasspath.extendsFrom localRuntime
-    clientRuntimeClasspath.extendsFrom localRuntimeOnly
+    realForge
+    realAe2
 }
 
 dependencies {
-    //runtimeOnly "curse.maven:glodium-957920:${glodium_file_id}"
-    implementation "org.appliedenergistics:guideme:${guide_me_version}"
-    api "org.appliedenergistics:appliedenergistics2:${ae2_version}"
-    //implementation "curse.maven:ex-pattern-provider-892005:${ex_pattern_file_id}"
-    jarJar implementation("io.github.pedroksl:ae2addonlib:${ae2addonlib_version}")
-//    jarJar implementation("de.mari_023:ae2wtlib_api:${ae2wtlib_version}") {
-//        transitive = false
-//    }
-//    runtimeOnly("de.mari_023:ae2wtlib:${ae2wtlib_version}") {
-//        transitive = false
-//    }
-
-    implementation "com.geckolib:geckolib-neoforge-${minecraft_version}:${geckolib_version}"
-    //compileOnly "dev.emi:emi-neoforge:${emi_version}:api"
-    //implementation "curse.maven:applied-flux-965012:${applied_flux_file_id}"
-
-    implementation "curse.maven:jade-324717:${jade_file_id}"
-    //compileOnly "me.shedaniel:RoughlyEnoughItems-neoforge:${rei_version}"
-    compileOnly "mezz.jei:jei-${jei_minecraft_version}-neoforge-api:${jei_version}"
-
-    // Compatibility
-    //compileOnly "curse.maven:apothic-enchanting-1063926:${apothic_ench_file_id}"
-    compileOnly "curse.maven:irisshaders-455508:${iris_file_id}"
-    //implementation "curse.maven:mega-cells-622112:${mega_file_id}"
-    //implementation "curse.maven:mekanism-268560:${mekanism_file_id}"
-    //implementation "curse.maven:applied-mekanistics-574300:${appmek_file_id}"
-    implementation "top.theillusivec4.curios:curios-neoforge:${project.curios_version}:api"
-    if (runtime_curio == "true") {
-        runtimeOnly("top.theillusivec4.curios:curios-neoforge:${project.curios_version}")
-    }
-
-    // Runtime Tests
-    //localRuntime "curse.maven:cucumber-272335:${cucumber_file_id}"
-    //localRuntime "curse.maven:mystical-agriculture-246640:${ma_file_id}"
-
-    //localRuntime "curse.maven:dark-mode-everywhere-574123:6470153"
-    //localRuntime "curse.maven:placebo-283644:${placebo_file_id}"
-    //localRuntime "curse.maven:apothic-attributes-898963:${apothic_att_file_id}"
-    //localRuntime "curse.maven:apothic-enchanting-1063926:${apothic_ench_file_id}"
-
-    //localRuntime "curse.maven:sodium-394468:${sodium_file_id}"
-    //localRuntime "curse.maven:irisshaders-455508:${iris_file_id}"
-    // setup Xei
-    switch (use_Xei) {
-        case "emi":
-            runtimeOnly "dev.emi:emi-neoforge:${emi_version}"
-            break
-        case "rei":
-            runtimeOnly "me.shedaniel:RoughlyEnoughItems-neoforge:${rei_version}"
-            runtimeOnly "dev.architectury:architectury-neoforge:15.0.8"
-            runtimeOnly "curse.maven:cloth-config-348521:5729127"
-            break
-        case "jei":
-            runtimeOnly "mezz.jei:jei-${jei_minecraft_version}-neoforge:${jei_version}"
-            break
-    }
-}
-
-final generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
-    group = 'build'
-    from('src/main/neoforge.mods.toml') {
-        rename '(.*)', 'META-INF/$1'
-    }
-    into 'build/generated/modMetadata'
-
-    // Exposed project properties
-    Map<String, String> projectProperties = [
-            'minecraft_version',
-            'neoforge_version_range',
-            'loader_version_range',
-            'ae2_version',
-            'mod_id',
-            'mod_name',
-            'mod_license',
-            'mod_version',
-            'mod_authors',
-            'mod_description',
-            'geckolib_version',
-            'ae2wtlib_version',
-            'jei_version'
-    ].collectEntries { [it, project[it]] }
-
-    inputs.properties projectProperties
-    expand projectProperties
-}
-sourceSets.main.resources.srcDir generateModMetadata
-neoForge.ideSyncTask generateModMetadata
-
-publishing {
-    publications {
-        register('mavenJava', MavenPublication) {
-            from components.java
-        }
-    }
-    repositories {
-        maven {
-            url = 'file://${project.projectDir}/repo'
-        }
-    }
+    // Real coordinates for a Forge 36.2.20 / AE2 8.4.4 workspace. The local
+    // apiStubs source set lets this repository compile in restricted CI without
+    // downloading Minecraft/Forge/AE2; those stubs are not packaged in the jar.
+    realForge "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    realAe2 "curse.maven:applied-energistics-2-223794:3528122"
 }
 
 tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
+    options.encoding = 'UTF-8'
+    sourceCompatibility = '1.8'
+    targetCompatibility = '1.8'
 }
 
-idea {
-    module {
-        downloadSources = true
-        downloadJavadoc = true
-    }
+processResources {
+    inputs.properties([mod_id: mod_id, mod_version: mod_version, mod_name: mod_name, forge_version: forge_version, minecraft_version: minecraft_version, ae2_version: ae2_version])
+    filesMatching('META-INF/mods.toml') { expand project.properties }
 }
 
-publisher {
-    apiKeys {
-        // Modrinth Token
-        modrinth System.getenv("MODRINTH_TOKEN")
-        // Curseforge Token
-        curseforge System.getenv("CURSE_TOKEN")
-        // GitHub Token
-        github System.getenv("GITHUB_TOKEN")
-    }
-
-    // Enable Debug mode. When enabled, no files will actually be uploaded
-    setDebug(false)
-
-    // Curseforge Project ID
-    setCurseID("1084104")
-
-    // Modrinth Project ID
-    setModrinthID("rxYaglEe")
-
-    // Type of release. beta, alpha or release
-    // You can also use VersionType.BETA, VersionType.ALPHA or VersionType.RELEASE
-    setVersionType("${project.version_type}")
-
-    // Changelog. This can be a file, string, OR, gist/github url
-    // For example: markdown.md, or "This is my changelog"
-    // Or: https://raw.githubusercontent.com/hypherionmc/changelogs/changelog.md
-    // Or https://gist.githubusercontent.com/hypherionmc/92f825d3c9337964cc77c9c8c9bf65e6/raw/ceeaaee5b98c688a23398864fe480b84796a1651/test_gist.md
-    setChangelog("https://raw.githubusercontent.com/pedroksl/AdvancedAE/refs/heads/master/CHANGELOG.md")
-
-    // Required for Modrinth/GitHub
-    setProjectVersion("${project.version}")
-
-    // Fancy display name for the upload.
-    // Will default to the project version if not set
-    setDisplayName("AdvancedAE-${project.version}")
-
-    // The supported game versions
-    setGameVersions("${project.minecraft_version}")
-
-    // The modloaders your upload supports.
-    // This can also be an Enum from ModLoader,
-    // like setLoaders(ModLoader.FABRIC, ModLoader.FORGE)
-    setLoaders(ModLoader.NEOFORGE)
-
-    // The new Curseforge Environment tag. Optional
-    // Valid values are "server", "client" or "both"
-    // You can also use CurseEnvironment.BOTH, or CurseEnvironment.SERVER or CurseEnvironment.CLIENT
-    setCurseEnvironment("both")
-
-    // The file to be uploaded. This can be a file, task, or string.
-    // setArtifact("build/libs/mymod.jar")
-    // setArtifact(jar.getArchiveFile().get())
-    // If this is a task, the task specified will be executed before publishing
-    setArtifact(jar.getArchiveFile().get())
-
-    // Disable the built in Fractureizer scanner
-    setDisableMalwareScanner(true)
-
-    // Add supported java versions. Currently only used by CurseForge
-    // Supports anything that can be parsed using JavaVersion.toVersion()
-    setJavaVersions(JavaVersion.VERSION_21, 25)
-
-    // Safety check to check if the artifact contains a valid mod metadata entry,
-    // which could possibly mean that the jar is empty
-    setDisableEmptyJarCheck(true)
-
-    github {
-        repo = "pedroksl/AdvancedAE"
-
-        tag = "${project.version}-neoforge"
-
-        createTag = true
-        createRelease = true
-        draft = false
-        updateRelease = true
-
-        displayName = "AdvancedAE-${project.version}"
-    }
-
-    curseDepends {
-        required "applied-energistics-2", "geckolib"
-        embedded "ae2addonlib"
-    }
-
-    modrinthDepends {
-        required "ae2", "geckolib"
+jar {
+    from sourceSets.main.output
+    exclude '**/*.java'
+    manifest {
+        attributes([
+                'Specification-Title'     : mod_name,
+                'Specification-Version'   : '1',
+                'Implementation-Title'    : mod_name,
+                'Implementation-Version'  : mod_version,
+                'Implementation-Vendor'   : 'SkyeSea'
+        ])
     }
 }
-
-spotless {
-    java {
-        target '/src/*/java/**/*.java'
-        endWithNewline()
-        leadingSpacesToTabs(4)
-        removeUnusedImports()
-        palantirJavaFormat()
-        toggleOffOn()
-        importOrderFile 'aae.importorder'
-        setLineEndings(LineEnding.UNIX)
-
-        bumpThisNumberIfACustomStepChanges(1)
-    }
-
-    json {
-        target 'src/*/resources/**/*.json'
-        targetExclude 'src/generated/resources/**'
-        biome().downloadDir(new File(rootDir, ".gradle/biome").absolutePath)
-        leadingTabsToSpaces(4)
-        endWithNewline()
-        setLineEndings(LineEnding.UNIX)
-    }
-}
-

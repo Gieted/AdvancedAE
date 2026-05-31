@@ -1,0 +1,1 @@
+package net.minecraftforge.event; public class RegistryEvent { public static class Register<T> { public Registry<T> getRegistry(){return new Registry<>();} } public static class Registry<T> { public void register(T t){} } }

@@ -1,0 +1,9 @@
+{
+  "parent": "ae2:part/export_bus_base",
+  "textures": {
+    "back": "stockexportbus:part/stock_export_bus_back",
+    "front": "stockexportbus:part/stock_export_bus",
+    "particle": "stockexportbus:part/stock_export_bus_back",
+    "sides": "stockexportbus:part/stock_export_bus_sides"
+  }
+}
