@@ -1,25 +1,28 @@
 package com.skyesea.stockexportbus;
 
 import appeng.api.config.Actionable;
-import appeng.api.config.FuzzyMode;
-import appeng.api.config.RedstoneMode;
-import appeng.api.config.Settings;
-import appeng.api.config.Upgrades;
-import appeng.api.config.YesNo;
-import appeng.api.networking.IGridNode;
-import appeng.api.networking.security.IActionHost;
-import appeng.api.networking.storage.IStorageGrid;
-import appeng.api.parts.IPartItem;
+import appeng.api.networking.energy.IEnergyGrid;
+import appeng.api.networking.security.IActionSource;
+import appeng.api.networking.ticking.TickRateModulation;
+import appeng.api.parts.IPartModel;
 import appeng.api.storage.IMEMonitor;
+import appeng.api.storage.channels.IItemStorageChannel;
 import appeng.api.storage.data.IAEItemStack;
-import appeng.helpers.IConfigManager;
+import appeng.core.Api;
+import appeng.core.AELog;
+import appeng.me.GridAccessException;
+import appeng.me.helpers.MachineSource;
+import appeng.util.item.AEItemStack;
 import appeng.parts.automation.ExportBusPart;
-import appeng.util.ConfigManager;
+import appeng.parts.PartModel;
 import appeng.util.InventoryAdaptor;
 import appeng.util.Platform;
 import appeng.util.inv.ItemSlot;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.CompoundNBT;
+import net.minecraft.util.ResourceLocation;
+import net.minecraftforge.items.IItemHandler;
+import net.minecraftforge.items.IItemHandlerModifiable;
 
 /**
  * AE2 8.4.4 backport of Advanced AE's Stock Export Bus concept.
@@ -29,141 +32,182 @@ import net.minecraft.nbt.CompoundNBT;
  * counts matching adjacent items and only exports enough to approach the target.
  */
 public class StockExportBusPart extends ExportBusPart {
-    private final ConfigManager stockConfigManager = new ConfigManager((manager, setting) -> this.getHost().markForSave());
-    private final StockConfigInventory stockConfig = new StockConfigInventory(this, 63);
+    private static final ResourceLocation MODEL_BASE =
+            new ResourceLocation(StockExportBus.MOD_ID, "part/stock_export_bus");
+    private static final IPartModel MODELS_OFF = new PartModel(
+            MODEL_BASE,
+            new ResourceLocation("appliedenergistics2", "part/export_bus_off"));
+    private static final IPartModel MODELS_ON = new PartModel(
+            MODEL_BASE,
+            new ResourceLocation("appliedenergistics2", "part/export_bus_on"));
+    private static final IPartModel MODELS_HAS_CHANNEL = new PartModel(
+            MODEL_BASE,
+            new ResourceLocation("appliedenergistics2", "part/export_bus_has_channel"));
 
-    public StockExportBusPart(IPartItem<?> partItem) {
+    private final StockConfigInventory stockConfig = new StockConfigInventory(this, 9);
+    private final IActionSource actionSource;
+
+    public StockExportBusPart(ItemStack partItem) {
         super(partItem);
-        this.stockConfigManager.registerSetting(Settings.REDSTONE_CONTROLLED, RedstoneMode.IGNORE);
-        this.stockConfigManager.registerSetting(Settings.FUZZY_MODE, FuzzyMode.IGNORE_ALL);
-        this.stockConfigManager.registerSetting(Settings.CRAFT_ONLY, YesNo.NO);
+        this.actionSource = new MachineSource(this);
+    }
+
+    public static void registerModels() {
+        Api.INSTANCE.getPartModels().registerModels(MODELS_OFF.getModels());
+        Api.INSTANCE.getPartModels().registerModels(MODELS_ON.getModels());
+        Api.INSTANCE.getPartModels().registerModels(MODELS_HAS_CHANNEL.getModels());
+    }
+
+    @Override
+    public IPartModel getStaticModels() {
+        if (this.isActive() && this.isPowered()) {
+            return MODELS_HAS_CHANNEL;
+        }
+        if (this.isPowered()) {
+            return MODELS_ON;
+        }
+        return MODELS_OFF;
     }
 
     @Override
     protected int getUpgradeSlots() {
-        return 6;
+        return 4;
     }
 
     @Override
-    public IConfigManager getConfigManager() {
-        return this.stockConfigManager;
+    public IItemHandler getInventoryByName(String name) {
+        if ("config".equals(name)) {
+            return this.stockConfig;
+        }
+        return super.getInventoryByName(name);
     }
 
-    @Override
-    public StockConfigInventory getConfig() {
-        return this.stockConfig;
+    public void setStockFilter(int slot, ItemStack filter) {
+        if (slot < 0 || slot >= this.availableSlots()) {
+            return;
+        }
+        if (filter.isEmpty()) {
+            return;
+        }
+
+        ItemStack configured = filter.copy();
+        configured.setCount(Math.max(1, Math.min(64, configured.getCount())));
+        this.stockConfig.setStackInSlot(slot, configured);
+    }
+
+    public int[] getStockAmounts() {
+        int[] amounts = new int[this.stockConfig.getSlots()];
+        for (int slot = 0; slot < amounts.length; slot++) {
+            amounts[slot] = this.stockConfig.getStackInSlot(slot).getCount();
+        }
+        return amounts;
     }
 
     @Override
     public void readFromNBT(CompoundNBT data) {
         super.readFromNBT(data);
         this.stockConfig.readFromNBT(data, "stockConfig");
-        this.stockConfigManager.readFromNBT(data);
+        IItemHandler legacyConfig = super.getInventoryByName("config");
+        if (this.stockConfig.isEmpty()) {
+            this.stockConfig.copyFrom(legacyConfig);
+        }
+        if (legacyConfig instanceof IItemHandlerModifiable) {
+            IItemHandlerModifiable modifiableLegacyConfig = (IItemHandlerModifiable) legacyConfig;
+            for (int slot = 0; slot < legacyConfig.getSlots(); slot++) {
+                modifiableLegacyConfig.setStackInSlot(slot, ItemStack.EMPTY);
+            }
+        }
     }
 
     @Override
     public void writeToNBT(CompoundNBT data) {
         super.writeToNBT(data);
         this.stockConfig.writeToNBT(data, "stockConfig");
-        this.stockConfigManager.writeToNBT(data);
     }
 
     @Override
-    protected boolean doBusWork() {
-        if (!this.canDoBusWork()) {
-            return false;
+    protected TickRateModulation doBusWork() {
+        if (!this.getProxy().isActive() || !this.canDoBusWork()) {
+            return TickRateModulation.IDLE;
         }
 
-        IGridNode node = this.getGridNode();
-        if (node == null) {
-            return false;
-        }
+        long itemsToSend = this.calculateItemsToSend();
+        boolean didSomething = false;
 
-        IStorageGrid storageGrid = node.getGrid().getStorageGrid();
-        IMEMonitor<IAEItemStack> inv = storageGrid.getInventory();
-        boolean worked = false;
-        int operations = Math.max(1, this.calculateOperationsPerTick());
-
-        for (int x = 0; x < this.availableSlots() && operations > 0; x++) {
-            ItemStack filter = this.stockConfig.getStackInSlot(x);
-            if (filter.isEmpty()) {
-                continue;
+        try {
+            final InventoryAdaptor destination = this.getHandler();
+            final IMEMonitor<IAEItemStack> inv = this.getProxy()
+                    .getStorage()
+                    .getInventory(Api.instance().storage().getStorageChannel(IItemStorageChannel.class));
+            final IEnergyGrid energy = this.getProxy().getEnergy();
+            if (destination == null) {
+                return TickRateModulation.SLEEP;
             }
 
-            long target = filter.getCount();
-            long stocked = this.getCurrentStock(filter);
-            long missing = target - stocked;
-            if (missing <= 0) {
-                continue;
-            }
+            for (int slot = 0; slot < this.availableSlots() && itemsToSend > 0; slot++) {
+                final ItemStack filter = this.stockConfig.getStackInSlot(slot);
+                if (filter.isEmpty()) {
+                    continue;
+                }
 
-            IAEItemStack request = Platform.getAEStackFromItemStack(filter);
-            if (request == null) {
-                continue;
-            }
+                final long target = filter.getCount();
+                final long stocked = this.getCurrentStock(filter);
+                long missing = target - stocked;
+                if (missing <= 0) {
+                    continue;
+                }
 
-            long operationAmount = Math.min(missing, (long) request.getStackSize() * operations);
-            request.setStackSize(operationAmount);
+                final IAEItemStack request = AEItemStack.fromItemStack(filter);
+                if (request == null) {
+                    continue;
+                }
 
-            IAEItemStack extracted = inv.extractItems(request, Actionable.SIMULATE, this.getActionSource());
-            if ((extracted == null || extracted.getStackSize() <= 0) && this.isCraftingEnabled()) {
-                this.requestCrafting(request, missing);
-                operations--;
-                continue;
-            }
+                final long transferCap = Math.min(itemsToSend, missing);
+                request.setStackSize(transferCap);
 
-            if (extracted == null || extracted.getStackSize() <= 0) {
-                continue;
-            }
+                final ItemStack simulated = request.createItemStack();
+                final ItemStack remainder = destination.simulateAdd(simulated);
+                final long canFit = simulated.getCount() - (remainder.isEmpty() ? 0 : remainder.getCount());
+                if (canFit <= 0) {
+                    continue;
+                }
 
-            extracted = inv.extractItems(extracted, Actionable.MODULATE, this.getActionSource());
-            if (extracted == null || extracted.getStackSize() <= 0) {
-                continue;
-            }
+                request.setStackSize(Math.min(transferCap, canFit));
+                final IAEItemStack extracted = Platform.poweredExtraction(energy, inv, request, this.actionSource);
+                if (extracted == null) {
+                    continue;
+                }
 
-            ItemStack exported = extracted.createItemStack();
-            ItemStack remainder = this.getAdaptor().addItems(exported);
-            int inserted = exported.getCount() - (remainder.isEmpty() ? 0 : remainder.getCount());
-            if (inserted > 0) {
-                worked = true;
-                operations -= Math.max(1, inserted / Math.max(1, filter.getMaxStackSize()));
-                if (!remainder.isEmpty()) {
-                    IAEItemStack remainderStack = Platform.getAEStackFromItemStack(remainder);
-                    if (remainderStack != null) {
-                        inv.injectItems(remainderStack, Actionable.MODULATE, this.getActionSource());
+                itemsToSend -= extracted.getStackSize();
+
+                final ItemStack exported = extracted.createItemStack();
+                final int exportedCount = exported.getCount();
+                final ItemStack failed = destination.addItems(exported);
+                final int failedCount = failed.isEmpty() ? 0 : failed.getCount();
+                didSomething |= exportedCount > failedCount;
+                if (!failed.isEmpty()) {
+                    final IAEItemStack failedAe = AEItemStack.fromItemStack(failed);
+                    if (failedAe != null) {
+                        inv.injectItems(failedAe, Actionable.MODULATE, this.actionSource);
                     }
                 }
             }
+        } catch (GridAccessException e) {
+            AELog.debug(e);
         }
 
-        return worked;
-    }
-
-    private boolean canDoBusWork() {
-        return this.isActive() && this.getAdaptor() != null;
-    }
-
-    private int calculateOperationsPerTick() {
-        return 1 + this.getInstalledUpgrades(Upgrades.SPEED);
-    }
-
-    private int availableSlots() {
-        return Math.min(1 + this.getInstalledUpgrades(Upgrades.CAPACITY) * 9, this.stockConfig.getSlots());
-    }
-
-    private boolean isCraftingEnabled() {
-        return this.getInstalledUpgrades(Upgrades.CRAFTING) > 0 && this.getConfigManager().getSetting(Settings.CRAFT_ONLY) != YesNo.YES;
+        return didSomething ? TickRateModulation.FASTER : TickRateModulation.SLOWER;
     }
 
     private long getCurrentStock(ItemStack filter) {
-        InventoryAdaptor adaptor = this.getAdaptor();
+        final InventoryAdaptor adaptor = this.getHandler();
         if (adaptor == null) {
             return 0;
         }
 
         long total = 0;
-        for (ItemSlot slot : adaptor) {
-            ItemStack stack = slot.getItemStack();
+        for (final ItemSlot slot : adaptor) {
+            final ItemStack stack = slot.getItemStack();
             if (!stack.isEmpty() && this.matchesFilter(filter, stack)) {
                 total += stack.getCount();
             }
@@ -175,17 +219,6 @@ public class StockExportBusPart extends ExportBusPart {
         if (filter.getItem() != stack.getItem()) {
             return false;
         }
-        FuzzyMode fuzzyMode = this.getConfigManager().getSetting(Settings.FUZZY_MODE);
-        if (fuzzyMode == FuzzyMode.IGNORE_ALL) {
-            return true;
-        }
-        return ItemStack.areItemStackTagsEqual(filter, stack) && filter.getDamage() == stack.getDamage();
-    }
-
-    private void requestCrafting(IAEItemStack what, long amount) {
-        // AE2 8.4.4 exposes crafting through the export bus internals. Keeping
-        // this hook isolated allows a real ForgeGradle workspace to replace it
-        // with AE2's exact crafting request API if desired without changing the
-        // stock-control algorithm.
+        return ItemStack.tagMatches(filter, stack) && filter.getDamageValue() == stack.getDamageValue();
     }
 }

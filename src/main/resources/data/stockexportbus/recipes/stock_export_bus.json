@@ -12,5 +12,5 @@
     "D": { "item": "minecraft:comparator" },
     "R": { "item": "minecraft:redstone" }
   },
-  "result": { "item": "stockexportbus:stock_export_bus_part" }
+  "result": { "item": "stockexportbus:stock_export_bus" }
 }

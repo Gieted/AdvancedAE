@@ -1,5 +1,5 @@
 {
-  "parent": "ae2:part/export_bus_base",
+  "parent": "appliedenergistics2:part/export_bus_base",
   "textures": {
     "back": "stockexportbus:part/stock_export_bus_back",
     "front": "stockexportbus:part/stock_export_bus",

@@ -1,53 +1,94 @@
-plugins {
-    id 'java'
+buildscript {
+    repositories {
+        maven { url = 'https://maven.minecraftforge.net' }
+        mavenCentral()
+    }
+    dependencies {
+        classpath group: 'net.minecraftforge.gradle', name: 'ForgeGradle', version: '5.1.+', changing: true
+    }
 }
+
+apply plugin: 'net.minecraftforge.gradle'
+apply plugin: 'eclipse'
+apply plugin: 'maven-publish'
 
 group = mod_group_id
 version = mod_version
+archivesBaseName = 'StockExportBus-1.16.5'
 
-base {
-    archivesName = 'StockExportBus-1.16.5'
+java.toolchain.languageVersion = JavaLanguageVersion.of(8)
+
+minecraft {
+    mappings channel: 'official', version: minecraft_version
+
+    runs {
+        client {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
+            property 'forge.logging.console.level', 'info'
+            mods {
+                stockexportbus {
+                    source sourceSets.main
+                }
+            }
+        }
+
+        server {
+            workingDirectory project.file('run')
+            property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
+            property 'forge.logging.console.level', 'info'
+            mods {
+                stockexportbus {
+                    source sourceSets.main
+                }
+            }
+        }
+    }
 }
 
-sourceSets {
-    apiStubs { java.srcDir 'src/apiStubs/java' }
-    main { compileClasspath += apiStubs.output }
-}
-
-configurations {
-    realForge
-    realAe2
+repositories {
+    mavenCentral()
+    maven {
+        url = 'https://www.cursemaven.com'
+        content {
+            includeGroup 'curse.maven'
+        }
+    }
 }
 
 dependencies {
-    // Real coordinates for a Forge 36.2.20 / AE2 8.4.4 workspace. The local
-    // apiStubs source set lets this repository compile in restricted CI without
-    // downloading Minecraft/Forge/AE2; those stubs are not packaged in the jar.
-    realForge "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
-    realAe2 "curse.maven:applied-energistics-2-223794:3528122"
+    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    implementation fg.deobf("curse.maven:applied-energistics-2-223794:3528122")
 }
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
-    sourceCompatibility = '1.8'
-    targetCompatibility = '1.8'
+    options.compilerArgs += ['-Xdiags:verbose']
 }
 
 processResources {
-    inputs.properties([mod_id: mod_id, mod_version: mod_version, mod_name: mod_name, forge_version: forge_version, minecraft_version: minecraft_version, ae2_version: ae2_version])
-    filesMatching('META-INF/mods.toml') { expand project.properties }
+    inputs.properties([
+            mod_id           : mod_id,
+            mod_version      : mod_version,
+            mod_name         : mod_name,
+            forge_version    : forge_version,
+            minecraft_version: minecraft_version,
+            ae2_version      : ae2_version
+    ])
+    filesMatching('META-INF/mods.toml') {
+        expand project.properties
+    }
 }
 
 jar {
-    from sourceSets.main.output
-    exclude '**/*.java'
     manifest {
         attributes([
-                'Specification-Title'     : mod_name,
-                'Specification-Version'   : '1',
-                'Implementation-Title'    : mod_name,
-                'Implementation-Version'  : mod_version,
-                'Implementation-Vendor'   : 'SkyeSea'
+                'Specification-Title'    : mod_name,
+                'Specification-Version'  : '1',
+                'Implementation-Title'   : mod_name,
+                'Implementation-Version' : mod_version,
+                'Implementation-Vendor'  : 'SkyeSea',
+                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
         ])
     }
 }
